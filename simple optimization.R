@@ -2,37 +2,36 @@
 # Each team needs 
 # 1QB
 # 2RB
-# 2WR
+# 3WR
 # 1RB/WR/TE
 # 1DEF
-# 1K
 # 1TE
-# 7BE
 # 
 # max fantasy values
-setwd("~/Documents/Fantasy Football Draft")
-d<-read.csv(file=paste(getwd(),"/Data/ESPN-Projections.csv", sep=""))
-d$id <- as.integer(factor(paste(d$name,d$team)))
+setwd("~/Documents/GitHub/Fantasy-Football-Draft")
 
+d<-read.csv(file=paste(getwd(),"/Data/DKSalaries.csv", sep=""),header=T)
 require("lpSolve");require("lpSolveAPI")
 
 #number of teams in the league
-num.teams<-10
+num.teams<-3
 teams<-seq(1,num.teams)
 
-num.players<-length(unique(d$id))
+num.players<-length(d$Name)
+#set arbitrary player id's
+d$id=seq(1,num.players)
 players<-unique(d$id)
 
 vars<-data.frame(player.id=rep(players,num.teams))
 vars<-merge(x=vars,y=d,by.y="id",by.x="player.id")
-vars<-vars[,c("player.id","pos","name")]
+vars<-vars[,c("player.id","Position","Name")]
 vars$team.id<-rep(seq(1,num.teams),num.players)
 
 ip <- make.lp(0,num.players*num.teams)
 
 set.type(ip,seq(1,num.players*num.teams),type="binary")
 
-set.objfn(ip,rep(d$total.points,num.teams))
+set.objfn(ip,rep(d$AvgPointsPerGame,num.teams))
 lp.control(ip,sense="max")
 
 for (p in players) {
@@ -40,7 +39,7 @@ for (p in players) {
   add.constraint(ip,
                  rep(1,num.teams),
                  "<=",
-                 1,
+                 2,
                  which(vars$player.id==p)
                  )
 }
@@ -48,60 +47,63 @@ for (p in players) {
 for (t in teams) {
   #each team needs at least 1 QB  
   add.constraint(ip,
-                 rep(1,sum(vars$pos=="QB")/num.teams),
-                 ">=",
+                 rep(1,sum(vars$Position=="QB")/num.teams),
+                 "=",
                  1,
-                 which(vars$team.id==t & vars$pos=="QB")
+                 which(vars$team.id==t & vars$Position=="QB")
   )
-  #each team needs at least 2 WR
+  #each team needs at least 3 WR
   add.constraint(ip,
-                 rep(1,sum(vars$pos=="WR")/num.teams),
+                 rep(1,sum(vars$Position=="WR")/num.teams),
                  ">=",
-                 2,
-                 which(vars$team.id==t & vars$pos=="WR")
+                 3,
+                 which(vars$team.id==t & vars$Position=="WR")
   )
   #each team needs at least 2 RB
   add.constraint(ip,
-                 rep(1,sum(vars$pos=="RB")/num.teams),
+                 rep(1,sum(vars$Position=="RB")/num.teams),
                  ">=",
                  2,
-                 which(vars$team.id==t & vars$pos=="RB")
+                 which(vars$team.id==t & vars$Position=="RB")
   )
-  #each team needs at least 1 DEF
+  #each team needs at least 1 DST
   add.constraint(ip,
-                 rep(1,sum(vars$pos=="DEF")/num.teams),
+                 rep(1,sum(vars$Position=="DST")/num.teams),
                  ">=",
                  1,
-                 which(vars$team.id==t & vars$pos=="DEF")
+                 which(vars$team.id==t & vars$Position=="DST")
   )
-  #each team needs at least 1 K
-  add.constraint(ip,
-                 rep(1,sum(vars$pos=="K")/num.teams),
-                 ">=",
-                 1,
-                 which(vars$team.id==t & vars$pos=="K")
-  )
+  
   #each team needs at least 1 TE
   add.constraint(ip,
-                 rep(1,sum(vars$pos=="TE")/num.teams),
+                 rep(1,sum(vars$Position=="TE")/num.teams),
                  ">=",
                  1,
-                 which(vars$team.id==t & vars$pos=="TE")
+                 which(vars$team.id==t & vars$Position=="TE")
   )
   #each team needs a flex player
-  add.constraint(ip,
-                 rep(1,sum(vars$pos=="TE",vars$pos=="RB",vars$pos=="WR")/num.teams),
-                 ">=",
-                 6,
-                 which(vars$team.id==t & (vars$pos=="TE" | vars$pos=="RB" | vars$pos=="WR"))
-  )
-  #each team needs 16 players
+  #add.constraint(ip,
+  #               rep(1,sum(vars$Position=="TE",vars$Position=="RB",vars$Position=="WR")/num.teams),
+  #               "=",
+  #               1,
+  #               which(vars$team.id==t & (vars$Position=="TE" | vars$Position=="RB" | vars$Position=="WR"))
+  #)
+  
+  #each team needs 9 players
   add.constraint(ip,
                  rep(1,num.players),
                  "=",
-                 16,
+                 9,
                  which(vars$team.id==t)
   )
+  
+  #must stay under salary cap per team
+  add.constraint(ip,
+                 d$Salary,
+                 "<=",
+                 50000,
+                 which(vars$team.id==t))
+  
 }
 
 write.lp(ip,paste(getwd(),"/modelformulation.txt",sep=""),type="lp",use.names=T)
@@ -111,6 +113,6 @@ get.variables(ip)
 
 get.constraints(ip)
 
-sol<-vars[get.variables(ip)==1,c("name","team.id","pos")]
-View(sol[order(sol$team.id,sol$pos),])
+sol<-vars[get.variables(ip)==1,c("Name","team.id","Position")]
+View(sol[order(sol$team.id,sol$Position),])
 
